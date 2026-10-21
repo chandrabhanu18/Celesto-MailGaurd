@@ -1,0 +1,1 @@
+"""MailGuard API Endpoints."""
