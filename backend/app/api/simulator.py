@@ -107,6 +107,140 @@ async def trigger_simulation(
         "Zero tool bindings or external side effects permitted"
     ]
 
+    # 8. Optional Phase 2B LLM Advisory Evaluation
+    llm_analysis_detail = None
+    llm_provider_used = None
+
+    if req.run_llm_analysis:
+        import hashlib
+        from backend.app.schemas.llm import LLMAnalysisContext, ThreatCategory, ThreatLevel, LLMAnalysisDetailResponse
+        from backend.app.services.llm_client import get_llm_client
+        from backend.app.services.llm_prompt_templates import build_analysis_prompt
+        from backend.app.db.models import LLMAnalysisRecord
+
+        threat_indicators_list = [
+            f"{ti.indicator_type}: {ti.description}" for ti in report.threat_indicators
+        ] if report else []
+        extracted_urls_list = [u.url for u in report.extracted_urls] if report else []
+        attachments_list = [f"{a.filename} ({a.content_type}, {a.size_bytes}B)" for a in report.attachments] if report else []
+
+        llm_ctx = LLMAnalysisContext(
+            email_id=email_rec.id,
+            subject=subject,
+            sender=sender,
+            recipient=recipient,
+            date_str=date_str,
+            sanitized_text=sanitized_text,
+            static_risk_score=risk_score,
+            static_risk_label=risk_label,
+            threat_indicators_count=threat_count,
+            threat_indicators=threat_indicators_list,
+            extracted_urls=extracted_urls_list,
+            attachments_summary=attachments_list
+        )
+
+        client = get_llm_client()
+        llm_provider_used = client.provider_name
+        analysis_result = await client.analyze(llm_ctx)
+
+        prompt_str = build_analysis_prompt(llm_ctx)
+        prompt_hash = hashlib.sha256(prompt_str.encode("utf-8")).hexdigest()
+        extracted_event_json = (
+            analysis_result.extracted_calendar_event.model_dump_json()
+            if analysis_result.extracted_calendar_event else None
+        )
+
+        llm_rec = LLMAnalysisRecord(
+            email_id=email_rec.id,
+            provider=client.provider_name,
+            model=client.model_name,
+            threat_category=analysis_result.threat_category.value,
+            threat_level=analysis_result.threat_level.value,
+            confidence=analysis_result.confidence,
+            urgency=analysis_result.urgency,
+            explanation=analysis_result.explanation,
+            indicators_json=json.dumps(analysis_result.indicators),
+            recommended_action=analysis_result.recommended_action,
+            calendar_event_detected=analysis_result.calendar_event_detected,
+            extracted_event_json=extracted_event_json,
+            raw_prompt_hash=prompt_hash
+        )
+        db.add(llm_rec)
+        await db.commit()
+        await db.refresh(llm_rec)
+
+        llm_analysis_detail = LLMAnalysisDetailResponse(
+            id=llm_rec.id,
+            email_id=email_rec.id,
+            provider=llm_rec.provider,
+            model=llm_rec.model,
+            threat_category=ThreatCategory(llm_rec.threat_category),
+            threat_level=ThreatLevel(llm_rec.threat_level),
+            confidence=llm_rec.confidence,
+            urgency=llm_rec.urgency,
+            explanation=llm_rec.explanation,
+            indicators=json.loads(llm_rec.indicators_json),
+            recommended_action=llm_rec.recommended_action,
+            calendar_event_detected=llm_rec.calendar_event_detected,
+            extracted_calendar_event=analysis_result.extracted_calendar_event,
+            is_advisory_only=True,
+            created_at=llm_rec.created_at.isoformat()
+        )
+
+        invariants.append(f"Phase 2B LLM advisory analysis completed via '{client.provider_name}'")
+        invariants.append("LLM executed with zero tools, zero network, zero action capabilities")
+
+    # 9. Optional Phase 3 Policy Engine Action Proposals (strictly PENDING_APPROVAL)
+    proposed_actions_formatted = []
+    if req.propose_actions:
+        from backend.app.services.policy_engine import PolicyEngine
+        from backend.app.schemas.action import ActionType, ActionState
+        from backend.app.db.models import ActionProposalRecord
+        from backend.app.api.actions import format_action_response
+
+        t_cat = analysis_result.threat_category.value if llm_analysis_detail else None
+        t_lvl = analysis_result.threat_level.value if llm_analysis_detail else None
+        t_urg = analysis_result.urgency if llm_analysis_detail else 1
+        t_cal = analysis_result.calendar_event_detected if llm_analysis_detail else False
+        t_cal_data = analysis_result.extracted_calendar_event.model_dump() if (llm_analysis_detail and analysis_result.extracted_calendar_event) else None
+        source_id = llm_rec.id if llm_analysis_detail else None
+
+        drafts = PolicyEngine.evaluate(
+            static_risk_label=risk_label,
+            static_risk_score=risk_score,
+            threat_category=t_cat,
+            threat_level=t_lvl,
+            urgency=t_urg,
+            calendar_event_detected=t_cal,
+            calendar_event_data=t_cal_data,
+            static_threat_indicators=[ti.indicator_type for ti in report.threat_indicators] if report else []
+        )
+
+        created_recs = []
+        for draft in drafts:
+            action_rec = ActionProposalRecord(
+                email_id=email_rec.id,
+                source_analysis_id=source_id,
+                action_type=draft.action_type.value,
+                state=ActionState.PENDING_APPROVAL.value,
+                reason=draft.reason,
+                policy_rule=draft.policy_rule,
+                risk_level=draft.risk_level,
+                payload_json=json.dumps(draft.payload),
+                is_human_approved=False
+            )
+            db.add(action_rec)
+            created_recs.append(action_rec)
+
+        if created_recs:
+            await db.commit()
+            for act in created_recs:
+                await db.refresh(act)
+
+        proposed_actions_formatted = [format_action_response(a) for a in created_recs]
+        invariants.append(f"Phase 3 Policy Engine generated {len(created_recs)} proposal(s) strictly in PENDING_APPROVAL state")
+        invariants.append("Zero actions executed; human approval strictly required before execution")
+
     return SimulationTriggerResponse(
         scenario_id=req.scenario_id,
         title=meta.title,
@@ -115,5 +249,9 @@ async def trigger_simulation(
         execution=exec_result,
         security_verdict=verdict,
         unauthorized_side_effects_prevented=True,
-        invariants_maintained=invariants
+        invariants_maintained=invariants,
+        llm_analysis=llm_analysis_detail,
+        llm_provider_used=llm_provider_used,
+        proposed_actions=proposed_actions_formatted,
+        has_pending_actions=len(proposed_actions_formatted) > 0
     )

@@ -6,6 +6,8 @@ from backend.app.config import settings
 from backend.app.db.database import init_db
 from backend.app.api.simulator import router as simulator_router
 from backend.app.api.celesto import router as celesto_router
+from backend.app.api.analysis import router as analysis_router
+from backend.app.api.actions import router as actions_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -32,6 +34,8 @@ app.add_middleware(
 # Mount API Routers
 app.include_router(simulator_router, prefix="/api")
 app.include_router(celesto_router, prefix="/api")
+app.include_router(analysis_router, prefix="/api")
+app.include_router(actions_router, prefix="/api")
 
 @app.get("/")
 async def root():
