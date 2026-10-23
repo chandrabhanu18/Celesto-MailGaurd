@@ -8,6 +8,7 @@ from backend.app.api.simulator import router as simulator_router
 from backend.app.api.celesto import router as celesto_router
 from backend.app.api.analysis import router as analysis_router
 from backend.app.api.actions import router as actions_router
+from backend.app.api.emails import router as emails_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -22,10 +23,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Enable CORS for React frontend
+# Enable CORS strictly for local development origins (no wildcard fallback)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -36,6 +40,7 @@ app.include_router(simulator_router, prefix="/api")
 app.include_router(celesto_router, prefix="/api")
 app.include_router(analysis_router, prefix="/api")
 app.include_router(actions_router, prefix="/api")
+app.include_router(emails_router, prefix="/api")
 
 @app.get("/")
 async def root():

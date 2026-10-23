@@ -6,6 +6,7 @@ import time
 import shutil
 import tempfile
 import asyncio
+import subprocess
 from typing import Optional
 from pathlib import Path
 from pydantic import ValidationError
@@ -67,23 +68,24 @@ class DemoFallbackProvider(CelestoSandboxProvider):
                 "PYTHONUTF8": "1"
             }
 
-            # Run in subprocess via asyncio
+            # Run in isolated subprocess in worker thread (robust across all Windows/Unix event loops)
             cmd = [sys.executable, str(guest_inspector), str(guest_eml)]
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=safe_env,
-                cwd=temp_dir
-            )
+
+            def _sync_subprocess_run():
+                return subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    timeout=settings.EXECUTION_TIMEOUT_SECONDS,
+                    env=safe_env,
+                    cwd=temp_dir
+                )
 
             try:
-                stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                    proc.communicate(),
-                    timeout=settings.EXECUTION_TIMEOUT_SECONDS
-                )
-            except asyncio.TimeoutError:
-                proc.kill()
+                proc = await asyncio.to_thread(_sync_subprocess_run)
+                stdout_bytes = proc.stdout
+                stderr_bytes = proc.stderr
+                returncode = proc.returncode
+            except subprocess.TimeoutExpired:
                 return SandboxExecutionResult(
                     provider_mode=self.provider_mode,
                     sandbox_id=sandbox_id,
@@ -106,15 +108,15 @@ class DemoFallbackProvider(CelestoSandboxProvider):
                     error_message=f"Output exceeded maximum size limit ({len(stdout_bytes)} > {settings.MAX_SANDBOX_OUTPUT_BYTES} bytes)"
                 )
 
-            if proc.returncode != 0:
+            if returncode != 0:
                 err_text = stderr_bytes.decode("utf-8", errors="replace")[:1000]
                 return SandboxExecutionResult(
                     provider_mode=self.provider_mode,
                     sandbox_id=sandbox_id,
                     network_mode="off",
                     execution_time_ms=execution_ms,
-                    exit_code=proc.returncode,
-                    error_message=f"Inspector exited with code {proc.returncode}: {err_text}"
+                    exit_code=returncode,
+                    error_message=f"Inspector exited with code {returncode}: {err_text}"
                 )
 
             stdout_str = stdout_bytes.decode("utf-8", errors="replace")
