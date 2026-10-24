@@ -9,10 +9,11 @@ from backend.app.api.celesto import router as celesto_router
 from backend.app.api.analysis import router as analysis_router
 from backend.app.api.actions import router as actions_router
 from backend.app.api.emails import router as emails_router
+from backend.app.api.runs import router as runs_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize SQLite tables on startup
+    # Initialize SQLite/PostgreSQL tables and seeds on startup
     await init_db()
     yield
 
@@ -41,6 +42,7 @@ app.include_router(celesto_router, prefix="/api")
 app.include_router(analysis_router, prefix="/api")
 app.include_router(actions_router, prefix="/api")
 app.include_router(emails_router, prefix="/api")
+app.include_router(runs_router, prefix="/api")
 
 @app.get("/")
 async def root():
@@ -54,4 +56,4 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    return {"status": "ok"}

@@ -1,0 +1,6 @@
+{
+  "who": "Security teams and professionals managing sensitive communication channels against phishing, payload drops, and prompt injection attacks.",
+  "agent_work": "Executes deep static and behavioral email inspection, header parsing, homoglyph detection, and malicious URL identification inside isolated microVM sandboxes.",
+  "proof_output": "Validated JSON security inspection report and deterministic action approval proposals.",
+  "idea_source": "original"
+}

@@ -101,3 +101,18 @@ class ActionProposalRecord(Base):
 
     email = relationship("EmailRecord", back_populates="actions")
     analysis = relationship("LLMAnalysisRecord", back_populates="actions")
+
+
+class RunRecord(Base):
+    """
+    Run Ledger Record tracking sandbox runs inside Celesto microVMs.
+    Satisfies Requirement 11 of the hackathon specification.
+    """
+    __tablename__ = "runs"
+
+    run_id = Column(String(64), primary_key=True)
+    sandbox_name = Column(String(128), nullable=False, index=True)
+    problem_id = Column(String(64), nullable=False)
+    state = Column(String(32), nullable=False)
+    execution_target = Column(String(64), nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)

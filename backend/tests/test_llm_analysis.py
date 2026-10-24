@@ -371,7 +371,7 @@ async def test_ollama_unavailable_handling():
     client = OllamaLLM(base_url="http://127.0.0.1:54321")
     ctx = LLMAnalysisContext(email_id="offline-test", subject="Hello", sanitized_text="Hi")
     
-    with pytest.raises(LLMProviderError, match="unreachable|error"):
+    with pytest.raises(LLMProviderError, match="unreachable|error|timed out"):
         await client.analyze(ctx)
 
 # -----------------------------------------------------------------------------

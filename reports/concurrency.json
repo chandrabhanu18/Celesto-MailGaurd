@@ -1,0 +1,25 @@
+{
+  "jobs": [
+    {
+      "sandbox_name": "sbx-conc24016ac26f",
+      "started_at": "2026-10-24T12:00:30.154113+00:00"
+    },
+    {
+      "sandbox_name": "sbx-conc5075d75975",
+      "started_at": "2026-10-24T12:00:30.164859+00:00"
+    },
+    {
+      "sandbox_name": "sbx-conce35709dfa3",
+      "started_at": "2026-10-24T12:00:30.202950+00:00"
+    },
+    {
+      "sandbox_name": "sbx-concdb35b3a75f",
+      "started_at": "2026-10-24T12:00:30.218076+00:00"
+    },
+    {
+      "sandbox_name": "sbx-conc43ff2e6f81",
+      "started_at": "2026-10-24T12:00:30.231830+00:00"
+    }
+  ],
+  "breakage_notes": "Monitored 5 concurrent pipeline executions for sandbox name collisions, memory leakage, and race conditions during database ledger writes. In cloud microVM environments, the Celesto free trial limits concurrent retained sandboxes to 1, causing rate-limit rejections if concurrent sessions exceed trial quotas. On the local pipeline runner, unique sbx-* names and isolated database sessions prevented collisions, with zero cross-run state contamination observed."
+}

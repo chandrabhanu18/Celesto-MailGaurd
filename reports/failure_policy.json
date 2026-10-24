@@ -1,0 +1,7 @@
+{
+  "failed_step": 7,
+  "total_steps": 10,
+  "policy": "fresh",
+  "rationale": "Controlled Failure Simulation Rationale: In a controlled 10-step multi-stage sandbox analysis workflow, when step 7 (dynamic detonation probe) is deliberately made to fail, MailGuard enforces a fresh start recovery policy. Reusing or resuming a potentially contaminated guest microVM risks state leakage and false negative results across inspection runs. The failed sandbox is immediately deleted, orphan processes are destroyed, and a completely fresh Celesto sandbox is initialized from the verified coding-agent baseline template.",
+  "trace_path": "reports/failure_trace.jsonl"
+}

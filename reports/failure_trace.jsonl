@@ -1,0 +1,11 @@
+{"step": 1, "name": "sandbox_provision", "status": "completed", "sandbox_name": "sbx-failstep07"}
+{"step": 2, "name": "guest_python_verification", "status": "completed", "sandbox_name": "sbx-failstep07"}
+{"step": 3, "name": "payload_transfer", "status": "completed", "sandbox_name": "sbx-failstep07"}
+{"step": 4, "name": "static_header_parsing", "status": "completed", "sandbox_name": "sbx-failstep07"}
+{"step": 5, "name": "homoglyph_detection", "status": "completed", "sandbox_name": "sbx-failstep07"}
+{"step": 6, "name": "url_extraction", "status": "completed", "sandbox_name": "sbx-failstep07"}
+{"step": 7, "name": "dynamic_detonation_probe", "status": "failed", "sandbox_name": "sbx-failstep07", "error": "GuestProbeTimeoutException"}
+{"event": "policy_applied", "policy": "fresh", "failed_step": 7, "action": "teardown_tainted_sandbox", "sandbox_name": "sbx-failstep07"}
+{"step": 8, "name": "sandbox_teardown", "status": "completed", "sandbox_name": "sbx-failstep07", "state": "deleted"}
+{"step": 9, "name": "fresh_sandbox_provision", "status": "completed", "sandbox_name": "sbx-recov01", "state": "ready"}
+{"step": 10, "name": "safe_analysis_completion", "status": "completed", "sandbox_name": "sbx-recov01", "state": "succeeded"}

@@ -1,0 +1,14 @@
+{
+  "capabilities": [
+    {
+      "id": "coding_agent_preset",
+      "why": "The coding-agent preset provisions a fully configured Linux guest environment with Python runtimes ready for automated execution, allowing MailGuard to immediately execute deep static inspection without custom VM image builds.",
+      "evidence_path": "backend/app/services/real_celesto_provider.py"
+    },
+    {
+      "id": "NOT_VERIFIED",
+      "why": "No second native Celesto Cloud capability is currently active. The application-level policy engine and human approval gate are implemented within MailGuard itself rather than via native Celesto SDK callbacks or hooks.",
+      "evidence_path": "backend/app/services/policy_engine.py"
+    }
+  ]
+}

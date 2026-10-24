@@ -5,6 +5,7 @@ from backend.app.db.models import (
     CelestoTelemetryRecord,
     LLMAnalysisRecord,
     ActionProposalRecord,
+    RunRecord,
 )
 
 __all__ = [
@@ -17,4 +18,5 @@ __all__ = [
     "CelestoTelemetryRecord",
     "LLMAnalysisRecord",
     "ActionProposalRecord",
+    "RunRecord",
 ]

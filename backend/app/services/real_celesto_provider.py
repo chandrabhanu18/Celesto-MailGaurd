@@ -2,6 +2,7 @@ import os
 import json
 import time
 import uuid
+import base64
 import tempfile
 import asyncio
 from pathlib import Path
@@ -14,6 +15,8 @@ from backend.app.schemas.sandbox import (
     SandboxAnalysisReport,
 )
 from backend.app.services.sandbox_provider import CelestoSandboxProvider
+from backend.app.services.audit_logger import log_command_audit
+
 
 
 class RealCelestoProvider(CelestoSandboxProvider):
@@ -130,15 +133,15 @@ class RealCelestoProvider(CelestoSandboxProvider):
                 template_id=settings.CELESTO_TEMPLATE_ID,
             )
 
-            # Use a stable sandbox identifier when available.
-            sandbox_id = getattr(
-                computer,
-                "name",
-                str(uuid.uuid4()),
-            )
+            # Ensure sandbox identifier matches sbx-[a-z0-9]{8,}
+            raw_name = getattr(computer, "name", None)
+            if raw_name and str(raw_name).startswith("sbx-"):
+                sandbox_id = str(raw_name)
+            else:
+                sandbox_id = f"sbx-{uuid.uuid4().hex[:12]}"
 
             # ---------------------------------------------------------
-            # 2. Upload inspector script.
+            # 2. Transfer inspector script inside guest using base64.
             # ---------------------------------------------------------
             inspector_src = settings.SANDBOX_AGENT_DIR / "inspector.py"
 
@@ -156,27 +159,29 @@ class RealCelestoProvider(CelestoSandboxProvider):
                     ),
                 )
 
-            computer.upload_file(
-                str(inspector_src),
-                "/tmp/inspector.py",
+            inspector_b64 = base64.b64encode(inspector_src.read_bytes()).decode("ascii")
+            create_inspector_cmd = (
+                f"python3 -c \"import base64; "
+                f"open('/tmp/inspector.py', 'wb').write(base64.b64decode('{inspector_b64}'))\""
             )
+            log_command_audit(sandbox_id, "create_guest_file /tmp/inspector.py", decision="allow")
+            computer.run(create_inspector_cmd)
 
             # ---------------------------------------------------------
-            # 3. Upload raw EML payload.
+            # 3. Transfer raw EML payload inside guest using base64.
             # ---------------------------------------------------------
-            local_eml_path = Path(temp_dir) / filename
-
-            with open(local_eml_path, "wb") as f:
-                f.write(raw_eml_bytes)
-
-            computer.upload_file(
-                str(local_eml_path),
-                "/tmp/untrusted.eml",
+            eml_b64 = base64.b64encode(raw_eml_bytes).decode("ascii")
+            create_eml_cmd = (
+                f"python3 -c \"import base64; "
+                f"open('/tmp/untrusted.eml', 'wb').write(base64.b64decode('{eml_b64}'))\""
             )
+            log_command_audit(sandbox_id, "create_guest_file /tmp/untrusted.eml", decision="allow")
+            computer.run(create_eml_cmd)
 
             # ---------------------------------------------------------
             # 4. Verify guest Python runtime.
             # ---------------------------------------------------------
+            log_command_audit(sandbox_id, "python3 --version", decision="allow")
             py3_check = computer.run("python3 --version")
 
             py3_exit = (
@@ -188,6 +193,7 @@ class RealCelestoProvider(CelestoSandboxProvider):
             if py3_exit == 0:
                 python_cmd = "python3"
             else:
+                log_command_audit(sandbox_id, "python --version", decision="allow")
                 py_check = computer.run("python --version")
 
                 py_exit = (
@@ -215,8 +221,10 @@ class RealCelestoProvider(CelestoSandboxProvider):
             # ---------------------------------------------------------
             # 5. Execute inspector inside the real Celesto microVM.
             # ---------------------------------------------------------
+            inspector_exec_cmd = f"{python_cmd} /tmp/inspector.py /tmp/untrusted.eml"
+            log_command_audit(sandbox_id, inspector_exec_cmd, decision="allow")
             exec_res = computer.run(
-                f"{python_cmd} /tmp/inspector.py /tmp/untrusted.eml",
+                inspector_exec_cmd,
                 timeout=settings.EXECUTION_TIMEOUT_SECONDS,
             )
 
